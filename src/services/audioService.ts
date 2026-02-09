@@ -1,6 +1,7 @@
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Sound } from 'expo-av/build/Audio';
 import { cacheService } from './cacheService';
+import { getReciterApiIdentifier } from '../constants';
 
 export type AudioStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -115,17 +116,21 @@ class AudioService {
   }
 
   // Load and play audio
+  // reciter can be either a short ID (e.g., 'mishary') or an API identifier (e.g., 'ar.alafasy')
   async loadAndPlay(
     globalAyahNumber: number,
-    reciter: string = 'ar.minshawi',
+    reciter: string = 'minshawi',
     autoPlay: boolean = true
   ): Promise<void> {
     try {
       // Cleanup previous sound
       await this.cleanup();
 
+      // Convert short reciter ID to API identifier if needed
+      const apiReciter = reciter.startsWith('ar.') ? reciter : getReciterApiIdentifier(reciter);
+
       this.currentGlobalAyahNumber = globalAyahNumber;
-      this.currentReciter = reciter;
+      this.currentReciter = apiReciter;
 
       this.updateState({
         status: 'loading',
@@ -133,7 +138,7 @@ class AudioService {
       });
 
       // Check if audio is cached
-      const cachedPath = await cacheService.getCachedAudioPath(globalAyahNumber, reciter);
+      const cachedPath = await cacheService.getCachedAudioPath(globalAyahNumber, apiReciter);
 
       let audioSource: { uri: string };
 
@@ -143,7 +148,7 @@ class AudioService {
       } else {
         // Stream from network
         // Format: https://cdn.islamic.network/quran/audio/128/ar.minshawi/1.mp3
-        const audioUrl = `https://cdn.islamic.network/quran/audio/128/${reciter}/${globalAyahNumber}.mp3`;
+        const audioUrl = `https://cdn.islamic.network/quran/audio/128/${apiReciter}/${globalAyahNumber}.mp3`;
         console.log('Audio URL:', audioUrl);
         audioSource = { uri: audioUrl };
       }
@@ -304,14 +309,18 @@ class AudioService {
   }
 
   // Preload audio (for faster playback)
-  async preloadAudio(globalAyahNumber: number, reciter: string = 'ar.minshawi'): Promise<void> {
+  // reciter can be either a short ID (e.g., 'mishary') or an API identifier (e.g., 'ar.alafasy')
+  async preloadAudio(globalAyahNumber: number, reciter: string = 'minshawi'): Promise<void> {
     try {
+      // Convert short reciter ID to API identifier if needed
+      const apiReciter = reciter.startsWith('ar.') ? reciter : getReciterApiIdentifier(reciter);
+
       // Check if already cached
-      const isCached = await cacheService.isAudioCached(globalAyahNumber, reciter);
+      const isCached = await cacheService.isAudioCached(globalAyahNumber, apiReciter);
 
       if (!isCached) {
         // Download and cache
-        await cacheService.downloadAudioForAyah(globalAyahNumber, reciter);
+        await cacheService.downloadAudioForAyah(globalAyahNumber, apiReciter);
       }
     } catch (error) {
       console.error('Preload audio error:', error);

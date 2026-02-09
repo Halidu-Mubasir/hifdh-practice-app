@@ -6,8 +6,49 @@ import { cacheService } from './cacheService';
 
 const findSurahById = (id: number, allSurahs: Surah[]): Surah | undefined => allSurahs.find(s => s.id === id);
 
+// Calculate the slice (Juz range) for a specific trial number
+export interface TrialSlice {
+  startJuz: number;
+  endJuz: number;
+}
+
+export const calculateSliceForTrial = (
+  trialNumber: number, // 1-indexed
+  totalTrials: number,
+  categoryStartJuz: number,
+  categoryEndJuz: number
+): TrialSlice => {
+  const totalJuzInRange = categoryEndJuz - categoryStartJuz + 1;
+
+  // Calculate slice size: how many Juz per question on average
+  const sliceSize = totalJuzInRange / totalTrials;
+
+  // Calculate the start and end Juz for this trial's slice
+  const sliceStartOffset = (trialNumber - 1) * sliceSize;
+  const sliceEndOffset = trialNumber * sliceSize;
+
+  // Convert to actual Juz numbers (floor for start, ceil for end to ensure coverage)
+  const startJuz = categoryStartJuz + Math.floor(sliceStartOffset);
+  const endJuz = Math.min(
+    categoryEndJuz,
+    categoryStartJuz + Math.ceil(sliceEndOffset) - 1
+  );
+
+  // Ensure at least 1 Juz in the slice
+  return {
+    startJuz: Math.min(startJuz, categoryEndJuz),
+    endJuz: Math.max(endJuz, startJuz),
+  };
+};
+
 // Modified to use cache-first approach
-const fetchAndProcessAyahText = async (surahId: number, ayahNum: number): Promise<{ text: string, globalAyahNum: number | null }> => {
+// Returns both the full text and a snippet (first 4 words)
+const fetchAndProcessAyahText = async (surahId: number, ayahNum: number): Promise<{
+  fullText: string;
+  snippet: string;
+  globalAyahNum: number | null;
+}> => {
+  let fullText = '';
   let snippet = '';
   let globalAyahNumber: number | null = null;
 
@@ -17,53 +58,45 @@ const fetchAndProcessAyahText = async (surahId: number, ayahNum: number): Promis
 
     if (cached) {
       // Use cached data
-      const trimmedText = cached.text.trim();
-      if (trimmedText) {
-        const words = trimmedText.split(/\s+/);
-        if (words.length <= 4) {
-          snippet = trimmedText;
-        } else {
-          snippet = words.slice(0, 4).join(' ') + ' ...';
-        }
-      }
+      fullText = cached.text.trim();
       globalAyahNumber = cached.globalAyahNum;
-      return { text: snippet, globalAyahNum: globalAyahNumber };
-    }
+    } else {
+      // If not cached, fetch from API
+      const response = await fetch(`https://api.alquran.cloud/v1/ayah/${surahId}:${ayahNum}/quran-uthmani`);
 
-    // If not cached, fetch from API
-    const response = await fetch(`https://api.alquran.cloud/v1/ayah/${surahId}:${ayahNum}/quran-uthmani`);
+      if (response.ok) {
+        const ayahData = await response.json();
+        const ayahTextContent = ayahData?.data?.text;
+        globalAyahNumber = ayahData?.data?.number ?? null;
 
-    if (response.ok) {
-      const ayahData = await response.json();
-      const ayahTextContent = ayahData?.data?.text;
-      globalAyahNumber = ayahData?.data?.number ?? null;
-
-      if (ayahTextContent) {
-        // Cache the full text for future use
-        if (globalAyahNumber !== null) {
-          await cacheService.cacheAyahText(surahId, ayahNum, ayahTextContent, globalAyahNumber);
-        }
-
-        const trimmedText = ayahTextContent.trim();
-        if (trimmedText) {
-          const words = trimmedText.split(/\s+/);
-          if (words.length <= 4) {
-            snippet = trimmedText;
-          } else {
-            snippet = words.slice(0, 4).join(' ') + ' ...';
+        if (ayahTextContent) {
+          // Cache the full text for future use
+          if (globalAyahNumber !== null) {
+            await cacheService.cacheAyahText(surahId, ayahNum, ayahTextContent, globalAyahNumber);
           }
+          fullText = ayahTextContent.trim();
+        } else {
+          console.warn(`No text found in API response for S${surahId}A${ayahNum}`);
         }
       } else {
-        console.warn(`No text found in API response for S${surahId}A${ayahNum}`);
+        console.error(`API error for S${surahId}A${ayahNum}: ${response.status} ${response.statusText}`);
       }
-    } else {
-      console.error(`API error for S${surahId}A${ayahNum}: ${response.status} ${response.statusText}`);
+    }
+
+    // Create snippet from full text (first 4 words)
+    if (fullText) {
+      const words = fullText.split(/\s+/);
+      if (words.length <= 4) {
+        snippet = fullText;
+      } else {
+        snippet = words.slice(0, 4).join(' ') + ' ...';
+      }
     }
   } catch (error) {
     console.error(`Failed to fetch Ayah text for S${surahId}A${ayahNum}:`, error);
   }
 
-  return { text: snippet, globalAyahNum: globalAyahNumber };
+  return { fullText, snippet, globalAyahNum: globalAyahNumber };
 };
 
 
@@ -216,14 +249,13 @@ export const generateTrial = async (
     return null;
   }
 
-  const { text: startSnippet, globalAyahNum: startGlobalAyahNumber } = await fetchAndProcessAyahText(chosenStartSurah.id, trialStartAyah);
+  const { snippet: startSnippet, globalAyahNum: startGlobalAyahNumber } = await fetchAndProcessAyahText(chosenStartSurah.id, trialStartAyah);
   if (startGlobalAyahNumber === null) {
     console.error("Failed to get global ayah number for the starting verse. Audio might not work.");
   }
 
   // Always fetch the end snippet
-  const { text: fetchedEndSnippet } = await fetchAndProcessAyahText(trialEndSurahId, trialEndAyah);
-  const endSnippet = fetchedEndSnippet;
+  const { snippet: endSnippet } = await fetchAndProcessAyahText(trialEndSurahId, trialEndAyah);
 
   return {
     surahId: chosenStartSurah.id,

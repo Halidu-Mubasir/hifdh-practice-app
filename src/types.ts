@@ -1,9 +1,20 @@
-
 export enum MemorizationCategory {
+  LAST_2_JUZ = 'LAST_2_JUZ',
   LAST_5_JUZ = 'LAST_5_JUZ',
   LAST_10_JUZ = 'LAST_10_JUZ',
   HALF_QURAN = 'HALF_QURAN',
   FULL_QURAN = 'FULL_QURAN',
+}
+
+// Preset range identifiers for the new UI
+export type PresetRangeId = 'FULL_QURAN' | 'HALF_QURAN' | 'LAST_10_JUZ' | 'LAST_5_JUZ' | 'LAST_2_JUZ';
+
+export interface PresetRange {
+  id: PresetRangeId;
+  label: string;
+  description: string;
+  startJuz: number;
+  endJuz: number;
 }
 
 export interface CategorySurahRange {
