@@ -18,6 +18,13 @@ export default function AppLayout() {
       <Stack.Screen name="configure" />
       <Stack.Screen name="trial" />
       <Stack.Screen name="summary" />
+      <Stack.Screen name="test-session" />
+      <Stack.Screen name="statistics" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="notifications" />
+      <Stack.Screen name="test-summary" />
+      <Stack.Screen name="rank" />
+      <Stack.Screen name="revision-mistakes" />
     </Stack>
   );
 }

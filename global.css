@@ -1,3 +1,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom scrollbar for web */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(19, 236, 146, 0.2);
+  border-radius: 10px;
+}
+
+/* Geometric background pattern */
+.geometric-bg {
+  background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBWsbNRyFUDXS9DcODwVhO4Y3ltA7N_NmBdRsE6r5TtOPS3GRIcA5VWRZfy02j-Oq8hd6PTTpp-flCfwbfRvo06HUAlHhkUnVBMOnNHMGsK7Uq-ZkfpPfVO3W-bJnmVcMTKBOrfF-064bLUqy1wWVvECFovnGFZkKkX7r2LVy5jTx7qeN8q0_HL3_Jg7qeFuUoS3MQnqW2jQcrTvSMV7XAnB6bnREfNP_DfnliWdTb-Tn37MvweaSwY1qLjhDjFp5qPZs2pMZsl_sFh');
+}

@@ -2,22 +2,17 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
+  TextInput,
   TouchableOpacity,
+  ScrollView,
   useColorScheme,
-  Alert,
+  StyleSheet,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Input, Button, ArabicText, GoogleIcon } from '../../src/components';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/useAuthStore';
-import * as WebBrowser from 'expo-web-browser';
-import { supabase } from '../../src/lib/supabase';
-
-// Required for OAuth to work properly
-WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
@@ -25,262 +20,382 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const { signIn } = useAuthStore();
 
-  const { signIn, isLoading, error: authError, clearError } = useAuthStore();
-
-  const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
-
-    if (!email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = 'Email is invalid';
-    }
-
-    if (!password) {
-      newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleLogin = async () => {
-    clearError();
-
-    if (!validateForm()) {
-      return;
-    }
-
+  const handleSignIn = async () => {
     try {
       await signIn(email, password);
-      // Navigation will be handled by auth state change
       router.replace('/(app)');
     } catch (error) {
-      // Error is handled by the store
-      console.error('Login failed:', error);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    try {
-      clearError();
-
-      // For mobile, don't pass redirectTo - let Supabase handle it
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (error) {
-        console.error('Google sign-in error:', error);
-        Alert.alert('Sign In Error', error.message);
-        return;
-      }
-
-      if (data?.url) {
-        // Open OAuth URL in system browser
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          undefined // Let the browser handle the redirect
-        );
-
-        if (result.type === 'success' && result.url) {
-          // Extract the URL params and let Supabase handle the session
-          // Supabase will automatically detect and process the auth callback
-          console.log('OAuth success, redirecting to app...');
-
-          // Small delay to let Supabase process the session
-          setTimeout(() => {
-            router.replace('/(app)');
-          }, 500);
-        } else if (result.type === 'cancel') {
-          Alert.alert('Cancelled', 'Sign in was cancelled');
-        }
-      }
-    } catch (error) {
-      console.error('Google sign-in failed:', error);
-      Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
+      console.error('Sign in error:', error);
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: isDark ? '#1f2937' : '#ffffff' }}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
+    <View style={[styles.container, isDark ? styles.containerDark : styles.containerLight]}>
+      <View style={styles.pattern} />
+
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={[styles.backButton, isDark ? styles.backButtonDark : styles.backButtonLight]}
+            onPress={() => router.back()}
+          >
+            <MaterialIcons name="arrow-back-ios-new" size={20} color={isDark ? "white" : "#0f172a"} />
+          </TouchableOpacity>
+
+          <View style={styles.logoContainer}>
+            <View style={styles.logoIcon}>
+              <MaterialIcons name="menu-book" size={20} color="#10221a" />
+            </View>
+          </View>
+
+          <View style={{ width: 40 }} />
+        </View>
+
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, padding: 24 }}
-          keyboardShouldPersistTaps="handled"
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 40 }}>
-            <ArabicText size={36} bold>
-              حفظ
-            </ArabicText>
-            <Text
-              style={{
-                fontSize: 28,
-                fontWeight: '700',
-                color: isDark ? '#f3f4f6' : '#1f2937',
-                marginTop: 8,
-              }}
-            >
-              Hifdh App
-            </Text>
-            <Text
-              style={{
-                fontSize: 16,
-                color: isDark ? '#9ca3af' : '#6b7280',
-                marginTop: 8,
-              }}
-            >
-              Sign in to your account
+          {/* Headline */}
+          <View style={styles.headlineContainer}>
+            <Text style={styles.headline}>Welcome Back</Text>
+            <Text style={styles.subheadline}>
+              Reconnect with the words of Allah and continue your Hifdh journey.
             </Text>
           </View>
 
-          {/* Error Message */}
-          {authError && (
-            <View
-              style={{
-                backgroundColor: '#fef2f2',
-                borderLeftWidth: 4,
-                borderLeftColor: '#ef4444',
-                padding: 12,
-                marginBottom: 20,
-                borderRadius: 4,
-              }}
-            >
-              <Text style={{ fontSize: 14, color: '#ef4444' }}>{authError}</Text>
+          {/* Form Fields */}
+          <View style={styles.formContainer}>
+            {/* Email */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.label}>Email Address</Text>
+              <TextInput
+                style={[styles.input, isDark ? styles.inputDark : styles.inputLight]}
+                placeholder="name@example.com"
+                placeholderTextColor="#64748b"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
             </View>
-          )}
 
-          {/* Form */}
-          <View>
-            <Input
-              label="Email"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              error={errors.email}
-            />
+            {/* Password */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={[styles.passwordInput, isDark ? styles.inputDark : styles.inputLight]}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#64748b"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity
+                  style={styles.visibilityButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <MaterialIcons
+                    name={showPassword ? "visibility" : "visibility-off"}
+                    size={24}
+                    color="#64748b"
+                  />
+                </TouchableOpacity>
+              </View>
 
-            <Input
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              error={errors.password}
-            />
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                onPress={() => router.push('/(auth)/forgot-password')}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
 
+            {/* Sign In Button */}
             <TouchableOpacity
-              onPress={() => router.push('/(auth)/forgot-password')}
-              style={{ alignSelf: 'flex-end', marginTop: -8, marginBottom: 20 }}
+              style={styles.signInButton}
+              onPress={handleSignIn}
             >
-              <Text style={{ fontSize: 14, color: '#10b981', fontWeight: '600' }}>
-                Forgot Password?
-              </Text>
+              <Text style={styles.signInButtonText}>Sign In</Text>
             </TouchableOpacity>
-
-            <Button onPress={handleLogin} loading={isLoading} fullWidth size="lg">
-              Sign In
-            </Button>
 
             {/* Divider */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginVertical: 24,
-              }}
-            >
-              <View
-                style={{
-                  flex: 1,
-                  height: 1,
-                  backgroundColor: isDark ? '#374151' : '#e5e7eb',
-                }}
-              />
-              <Text
-                style={{
-                  marginHorizontal: 16,
-                  fontSize: 14,
-                  color: isDark ? '#9ca3af' : '#6b7280',
-                }}
-              >
-                OR
-              </Text>
-              <View
-                style={{
-                  flex: 1,
-                  height: 1,
-                  backgroundColor: isDark ? '#374151' : '#e5e7eb',
-                }}
-              />
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Or continue with</Text>
+              <View style={styles.dividerLine} />
             </View>
 
-            {/* Google Sign In */}
-            <Button
-              onPress={handleGoogleSignIn}
-              variant="outline"
-              fullWidth
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <GoogleIcon size={20} />
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: '600',
-                    color: isDark ? '#f3f4f6' : '#1f2937',
-                  }}
-                >
-                  Continue with Google
-                </Text>
-              </View>
-            </Button>
-          </View>
-
-          {/* Sign Up Link */}
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'center',
-              marginTop: 24,
-            }}
-          >
-            <Text style={{ fontSize: 14, color: isDark ? '#9ca3af' : '#6b7280' }}>
-              Don't have an account?{' '}
-            </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
-              <Text style={{ fontSize: 14, color: '#10b981', fontWeight: '600' }}>
-                Sign Up
-              </Text>
+            {/* Social Login Buttons */}
+            <TouchableOpacity style={[styles.socialButton, isDark ? styles.socialButtonDark : styles.socialButtonLight]}>
+              <Image
+                source={{ uri: 'https://cdn1.iconfinder.com/data/icons/google-s-logo/150/Google_Icons-09-512.png' }}
+                style={styles.googleIcon}
+              />
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.socialButton, isDark ? styles.socialButtonDark : styles.socialButtonLight]}>
+              <MaterialIcons name="apple" size={24} color="white" />
+              <Text style={styles.socialButtonText}>Continue with Apple</Text>
+            </TouchableOpacity>
+
+            {/* Footer Link */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
+                <Text style={styles.footerLink}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Guest Mode */}
-          <View style={{ marginTop: 32 }}>
-            <Button
-              onPress={() => router.replace('/(app)')}
-              variant="outline"
-              fullWidth
-            >
-              Continue as Guest
-            </Button>
-          </View>
+          {/* Bottom Spacing */}
+          <View style={{ height: 32 }} />
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+        {/* Bottom Indicator */}
+        <View style={styles.bottomIndicator}>
+          <View style={styles.indicatorBar} />
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  containerLight: {
+    backgroundColor: '#f6f8f7',
+  },
+  containerDark: {
+    backgroundColor: '#10221a',
+  },
+  pattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.05,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonLight: {
+    backgroundColor: 'rgba(226, 232, 240, 0.5)',
+  },
+  backButtonDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoIcon: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#13ec92',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#13ec92',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  headlineContainer: {
+    paddingTop: 32,
+    paddingBottom: 40,
+  },
+  headline: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: -1,
+    marginBottom: 8,
+  },
+  subheadline: {
+    fontSize: 18,
+    color: '#94a3b8',
+    lineHeight: 28,
+  },
+  formContainer: {
+    gap: 20,
+  },
+  fieldContainer: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#cbd5e1',
+    paddingLeft: 4,
+  },
+  input: {
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: 'white',
+  },
+  inputLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: '#334155',
+  },
+  inputDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: '#334155',
+  },
+  passwordContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingRight: 48,
+    fontSize: 16,
+    color: 'white',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: '#334155',
+  },
+  visibilityButton: {
+    position: 'absolute',
+    right: 16,
+    padding: 8,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#13ec92',
+  },
+  signInButton: {
+    height: 56,
+    backgroundColor: '#13ec92',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    shadowColor: '#13ec92',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  signInButtonText: {
+    color: '#10221a',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#1e293b',
+  },
+  dividerText: {
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  socialButtonLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: '#334155',
+  },
+  socialButtonDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: '#334155',
+  },
+  googleIcon: {
+    width: 24,
+    height: 24,
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'white',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#94a3b8',
+  },
+  footerLink: {
+    fontSize: 14,
+    color: '#13ec92',
+    fontWeight: '700',
+  },
+  bottomIndicator: {
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 8,
+  },
+  indicatorBar: {
+    width: 128,
+    height: 6,
+    backgroundColor: '#334155',
+    borderRadius: 3,
+  },
+});
