@@ -77,7 +77,7 @@ export class Storage {
 
   static async updateSettings(partialSettings: Partial<Settings>): Promise<void> {
     const currentSettings = await this.getSettings();
-    const newSettings = { ...currentSettings, ...partialSettings };
+    const newSettings = { ...(currentSettings ?? DEFAULT_SETTINGS), ...partialSettings };
     await this.setSettings(newSettings);
   }
 

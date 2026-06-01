@@ -323,7 +323,7 @@ class CacheService {
       // Check text cache
       const textFiles = await FileSystem.readDirectoryAsync(this.TEXT_CACHE_DIR);
       for (const file of textFiles) {
-        const filePath = `${TEXT_CACHE_DIR}${file}`;
+        const filePath = `${this.TEXT_CACHE_DIR}${file}`;
         const content = await FileSystem.readAsStringAsync(filePath);
         const data = JSON.parse(content) as CachedAyahText;
 

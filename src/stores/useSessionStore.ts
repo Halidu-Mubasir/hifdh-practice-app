@@ -1,8 +1,10 @@
 import { create } from 'zustand';
-import { CategoryInfo, Trial, TrialRecord } from '../types';
-import { db } from '../services/database';
+import { CategoryInfo, PresetRangeId, Trial, TrialRecord } from '../types';
+import { db, LocalSession, LocalTrialResult } from '../services/database';
 import { generateTrial } from '../services/trialManager';
 import { surahData } from '../services/quranData';
+import { getPresetRangeById, presetRangeToCategoryInfo } from '../constants';
+import { useAuthStore } from './useAuthStore';
 
 export interface SessionState {
   // Session configuration
@@ -32,6 +34,7 @@ export interface SessionState {
   setCategory: (category: CategoryInfo) => void;
   setNumberOfTrials: (count: number) => void;
   startSession: () => Promise<void>;
+  resumeSession: (session: LocalSession, savedTrials: LocalTrialResult[]) => boolean;
   generateCurrentTrial: () => Promise<void>;
   regenerateTrial: () => Promise<void>;
   setScore: (score: number | null) => void;
@@ -85,7 +88,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
       // Save session to database
       const sessionId = await db.saveSession({
-        userId: null, // Will be set after auth implementation
+        userId: useAuthStore.getState().user?.id ?? null,
         categoryId: selectedCategory.id,
         trialsCount: numberOfTrials,
         startedAt: sessionStartTime,
@@ -114,6 +117,65 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         trialError: 'Failed to start session. Please try again.',
       });
     }
+  },
+
+  resumeSession: (session, savedTrials) => {
+    // Reconstruct the CategoryInfo from the stored preset id.
+    const preset = getPresetRangeById(session.categoryId as PresetRangeId);
+    if (!preset) {
+      console.error('Cannot resume session: unknown category', session.categoryId);
+      return false;
+    }
+
+    let category: CategoryInfo;
+    try {
+      category = presetRangeToCategoryInfo(preset);
+    } catch (error) {
+      console.error('Cannot resume session: invalid range', error);
+      return false;
+    }
+
+    // Rebuild the committed-records array from the trials already saved to the DB.
+    const records: Array<TrialRecord | null> = new Array(session.trialsCount).fill(null);
+    for (const t of savedTrials) {
+      if (t.trialNumber >= 1 && t.trialNumber <= session.trialsCount) {
+        records[t.trialNumber - 1] = {
+          trial: {
+            surahId: t.surahId,
+            surahName: t.surahName,
+            surahEnglishName: t.surahEnglishName,
+            startAyah: t.startAyah,
+            startGlobalAyahNumber: t.startGlobalAyahNumber,
+            endSurahId: t.endSurahId,
+            endSurahName: t.endSurahName,
+            endSurahEnglishName: t.endSurahEnglishName,
+            endAyah: t.endAyah,
+            arabicSnippet: t.arabicSnippet,
+            arabicEndSnippet: t.arabicEndSnippet || undefined,
+          },
+          score: t.score,
+          notes: t.notes,
+        };
+      }
+    }
+
+    set({
+      selectedCategory: category,
+      numberOfTrials: session.trialsCount,
+      sessionId: session.id,
+      sessionStartTime: session.startedAt,
+      currentAttempt: savedTrials.length + 1,
+      sessionRecords: records,
+      currentTrial: null,
+      isGeneratingTrial: false,
+      trialError: null,
+      currentScore: null,
+      currentNotes: '',
+      isSessionActive: true,
+      isSessionComplete: false,
+    });
+
+    return true;
   },
 
   generateCurrentTrial: async () => {

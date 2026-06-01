@@ -54,7 +54,7 @@ export default function TestSessionScreen() {
                     <TouchableOpacity
                         style={[styles.finishButton, isDark ? styles.headerButtonDark : styles.headerButtonLight]}
                         activeOpacity={0.7}
-                        onPress={() => router.push('/(app)/test-summary')}
+                        onPress={() => router.push('/(app)/summary')}
                     >
                         <Text style={styles.finishButtonText}>FINISH</Text>
                     </TouchableOpacity>

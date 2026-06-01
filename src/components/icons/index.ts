@@ -4,3 +4,5 @@ export { PlayIcon } from './PlayIcon';
 export { StopIcon } from './StopIcon';
 export { RefreshIcon } from './RefreshIcon';
 export { GoogleIcon } from './GoogleIcon';
+export { CheckCircleIcon } from './CheckCircleIcon';
+export { ExportIcon } from './ExportIcon';

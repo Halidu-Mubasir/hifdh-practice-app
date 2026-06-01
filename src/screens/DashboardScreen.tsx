@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,101 @@ import {
   useColorScheme,
   StyleSheet,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../stores/useAuthStore';
+import { useSessionStore } from '../stores/useSessionStore';
+import { db, LocalSession } from '../services/database';
+import { PRESET_RANGES, getPresetRangeById } from '../constants';
+import { PresetRangeId } from '../types';
+
+interface LastSessionInfo {
+  session: LocalSession;
+  savedCount: number;
+  presetId: PresetRangeId | null;
+  categoryTitle: string;
+  isResumable: boolean;
+}
 
 export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
+  const { resumeSession } = useSessionStore();
+  const [sessionCount, setSessionCount] = useState<number>(0);
+  const [averageScore, setAverageScore] = useState<number | null>(null);
+  const [lastSession, setLastSession] = useState<LastSessionInfo | null>(null);
 
-  const userName = user?.email?.split('@')[0] || 'Guest';
+  const userName = profile?.displayName || user?.email?.split('@')[0] || 'Guest';
+
+  // Reload stats and the most recent session whenever the dashboard regains focus,
+  // so progress reflects a session the user may have just paused or completed.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      (async () => {
+        const [count, avg, sessions] = await Promise.all([
+          db.getSessionCount(),
+          db.getAverageScore(),
+          db.getSessionHistory(1),
+        ]);
+        if (!active) return;
+
+        setSessionCount(count);
+        setAverageScore(avg);
+
+        const last = sessions[0];
+        if (last) {
+          const trials = await db.getTrialsForSession(last.id);
+          if (!active) return;
+          const preset = getPresetRangeById(last.categoryId as PresetRangeId);
+          setLastSession({
+            session: last,
+            savedCount: trials.length,
+            presetId: preset?.id ?? null,
+            categoryTitle: preset?.label ?? last.categoryId,
+            isResumable: last.completedAt == null && trials.length < last.trialsCount,
+          });
+        } else {
+          setLastSession(null);
+        }
+      })().catch(() => {});
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  const accuracyDisplay = sessionCount > 0 && averageScore !== null
+    ? `${Math.round((averageScore / 5) * 100)}%`
+    : '—';
+
+  const journeyProgress = lastSession && lastSession.session.trialsCount > 0
+    ? Math.round((lastSession.savedCount / lastSession.session.trialsCount) * 100)
+    : 0;
+  const lastStudiedTitle = lastSession?.categoryTitle ?? 'No active session';
+
+  const handleContinue = async () => {
+    if (lastSession?.isResumable) {
+      const trials = await db.getTrialsForSession(lastSession.session.id);
+      if (resumeSession(lastSession.session, trials)) {
+        router.push('/(app)/trial');
+        return;
+      }
+    }
+    // Fallback: open config, preselecting the last range when known.
+    if (lastSession?.presetId) {
+      router.push({ pathname: '/(app)/configure', params: { levelId: lastSession.presetId } });
+    } else {
+      router.push('/(app)/configure');
+    }
+  };
+
+  const handleSelectLevel = (presetId: PresetRangeId) => {
+    router.push({ pathname: '/(app)/configure', params: { levelId: presetId } });
+  };
 
   return (
     <SafeAreaView style={[styles.container, isDark ? styles.containerDark : styles.containerLight]}>
@@ -67,17 +152,17 @@ export default function DashboardScreen() {
         {/* Quick Stats Summary */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Verses Verified</Text>
+            <Text style={styles.statLabel}>Sessions Done</Text>
             <View style={styles.statValueRow}>
-              <Text style={styles.statValue}>142</Text>
-              <Text style={styles.statChange}>+12 today</Text>
+              <Text style={styles.statValue}>{sessionCount}</Text>
+              <Text style={styles.statChange}>total</Text>
             </View>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Accuracy</Text>
+            <Text style={styles.statLabel}>Avg Accuracy</Text>
             <View style={styles.statValueRow}>
-              <Text style={styles.statValue}>98%</Text>
-              <Text style={styles.statChange}>Top 5%</Text>
+              <Text style={styles.statValue}>{accuracyDisplay}</Text>
+              <Text style={styles.statChange}>of 5 stars</Text>
             </View>
           </View>
         </View>
@@ -91,26 +176,32 @@ export default function DashboardScreen() {
             <View style={styles.progressHeader}>
               <View style={styles.progressHeaderOverlay} />
               <View style={styles.progressHeaderContent}>
-                <Text style={styles.progressHeaderLabel}>OVERALL PROGRESS</Text>
+                <Text style={styles.progressHeaderLabel}>
+                  {lastSession?.isResumable ? 'SESSION PROGRESS' : 'LAST SESSION'}
+                </Text>
                 <Text style={styles.progressHeaderValue}>
-                  65% <Text style={styles.progressHeaderUnit}>Complete</Text>
+                  {journeyProgress}% <Text style={styles.progressHeaderUnit}>Complete</Text>
                 </Text>
               </View>
             </View>
             <View style={styles.progressBody}>
               <View style={styles.progressBarBg}>
-                <View style={styles.progressBarFill} />
+                <View style={[styles.progressBarFill, { width: `${journeyProgress}%` }]} />
               </View>
               <View style={styles.progressFooter}>
-                <View>
+                <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={styles.progressFooterLabel}>Last studied</Text>
-                  <Text style={styles.progressFooterValue}>Juz 30: An-Naba</Text>
+                  <Text style={styles.progressFooterValue} numberOfLines={1}>
+                    {lastStudiedTitle}
+                  </Text>
                 </View>
                 <TouchableOpacity
                   style={styles.continueButton}
-                  onPress={() => router.push('/(app)/configure')}
+                  onPress={handleContinue}
                 >
-                  <Text style={styles.continueButtonText}>Continue</Text>
+                  <Text style={styles.continueButtonText}>
+                    {lastSession?.isResumable ? 'Continue' : 'Practice'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -123,87 +214,25 @@ export default function DashboardScreen() {
             Select Practice Level
           </Text>
           <View style={styles.levelsGrid}>
-            {/* Level 1: Mastered */}
-            <View style={styles.levelCard}>
-              <View style={styles.levelCheckmark}>
-                <Text style={styles.checkmarkIcon}>✓</Text>
-              </View>
-              <View style={styles.levelIconContainer}>
-                <Text style={styles.levelIcon}>📖</Text>
-              </View>
-              <View>
-                <Text style={styles.levelTitle}>Last 10 Surahs</Text>
-                <Text style={styles.levelSubtitle}>100% Mastered</Text>
-              </View>
-              <View style={styles.levelProgressBg}>
-                <View style={[styles.levelProgressFill, styles.levelProgressComplete]} />
-              </View>
-            </View>
-
-            {/* Level 2: Active */}
-            <TouchableOpacity
-              style={[styles.levelCard, styles.levelCardActive]}
-              onPress={() => router.push('/(app)/configure')}
-            >
-              <View style={styles.levelIconContainer}>
-                <Text style={styles.levelIcon}>📚</Text>
-              </View>
-              <View>
-                <Text style={styles.levelTitle}>Juz 30</Text>
-                <Text style={styles.levelSubtitle}>85% Complete</Text>
-              </View>
-              <View style={styles.levelProgressBg}>
-                <View style={[styles.levelProgressFill, { width: '85%' }]} />
-              </View>
-            </TouchableOpacity>
-
-            {/* Level 3: Learning */}
-            <TouchableOpacity
-              style={styles.levelCard}
-              onPress={() => router.push('/(app)/configure')}
-            >
-              <View style={styles.levelIconContainer}>
-                <Text style={styles.levelIcon}>📑</Text>
-              </View>
-              <View>
-                <Text style={styles.levelTitle}>Juz 1-5</Text>
-                <Text style={styles.levelSubtitle}>20% Complete</Text>
-              </View>
-              <View style={styles.levelProgressBg}>
-                <View style={[styles.levelProgressFill, { width: '20%' }]} />
-              </View>
-            </TouchableOpacity>
-
-            {/* Level 4: Locked */}
-            <View style={[styles.levelCard, styles.levelCardLocked]}>
-              <View style={styles.levelLockOverlay}>
-                <Text style={styles.lockIcon}>🔒</Text>
-              </View>
-              <View style={[styles.levelIconContainer, styles.levelIconContainerLocked]}>
-                <Text style={styles.levelIconLocked}>📕</Text>
-              </View>
-              <View>
-                <Text style={styles.levelTitleLocked}>Juz 1-15</Text>
-                <Text style={styles.levelSubtitleLocked}>Locked</Text>
-              </View>
-              <View style={styles.levelProgressBg}>
-                <View style={[styles.levelProgressFillLocked, { width: 0 }]} />
-              </View>
-            </View>
-
-            {/* Level 5: Locked Full Quran */}
-            <View style={[styles.levelCardWide, styles.levelCardLocked]}>
-              <View style={styles.levelLockOverlay}>
-                <Text style={styles.lockIcon}>🔒</Text>
-              </View>
-              <View style={[styles.levelIconContainerLarge, styles.levelIconContainerLocked]}>
-                <Text style={styles.levelIconLarge}>📕</Text>
-              </View>
-              <View style={styles.levelInfoWide}>
-                <Text style={styles.levelTitleLocked}>Full Quran</Text>
-                <Text style={styles.levelSubtitleLocked}>Complete Juz 1-15 to unlock</Text>
-              </View>
-            </View>
+            {PRESET_RANGES.map((preset) => (
+              <TouchableOpacity
+                key={preset.id}
+                style={[styles.levelCard, styles.levelCardActive]}
+                onPress={() => handleSelectLevel(preset.id)}
+                activeOpacity={0.75}
+              >
+                <View style={styles.levelIconContainer}>
+                  <Text style={styles.levelIcon}>📖</Text>
+                </View>
+                <View>
+                  <Text style={styles.levelTitle}>{preset.label}</Text>
+                  <Text style={styles.levelSubtitle}>{preset.description}</Text>
+                </View>
+                <View style={styles.levelProgressBg}>
+                  <View style={[styles.levelProgressFill, { width: '0%' }]} />
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </ScrollView>
@@ -233,7 +262,11 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.navItem}
+          activeOpacity={0.7}
+          onPress={() => router.push('/(app)/rank')}
+        >
           <Text style={styles.navIcon}>🏆</Text>
           <Text style={styles.navLabel}>Rank</Text>
         </TouchableOpacity>
@@ -694,7 +727,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     padding: 8,
-    backgroundColor: 'rgba(255, 0, 0, 0.2)', // DEBUG: Red tint to see if visible
   },
   navIcon: {
     fontSize: 20,
