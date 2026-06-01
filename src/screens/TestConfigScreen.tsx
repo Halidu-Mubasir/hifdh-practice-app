@@ -33,8 +33,12 @@ export default function TestConfigScreen() {
     setPreferredReciter
   } = useSettingsStore();
 
-  // Local state
-  const [selectedPresetId, setSelectedPresetId] = useState<PresetRangeId>('LAST_2_JUZ');
+  // Local state — initialize the range from the level tapped on the dashboard, if valid.
+  const initialPresetId: PresetRangeId =
+    params.levelId && PRESET_RANGES.some((p) => p.id === params.levelId)
+      ? (params.levelId as PresetRangeId)
+      : 'LAST_2_JUZ';
+  const [selectedPresetId, setSelectedPresetId] = useState<PresetRangeId>(initialPresetId);
   const [selectedReciter, setSelectedReciter] = useState(preferredReciter || 'mishary');
   const [numQuestions, setNumQuestions] = useState(10);
   const [showEndingVerse, setShowEndingVerse] = useState(showEndVerseSnippet);
@@ -44,6 +48,13 @@ export default function TestConfigScreen() {
 
   // Get the selected preset
   const selectedPreset = PRESET_RANGES.find(p => p.id === selectedPresetId) || PRESET_RANGES[4]; // Default to Last 2 Juz
+
+  // Keep the selected range in sync if the dashboard passes a new level.
+  useEffect(() => {
+    if (params.levelId && PRESET_RANGES.some((p) => p.id === params.levelId)) {
+      setSelectedPresetId(params.levelId as PresetRangeId);
+    }
+  }, [params.levelId]);
 
   // Sync with settings store
   useEffect(() => {

@@ -43,6 +43,19 @@ export interface SyncQueueItem {
   attempts: number;
 }
 
+// Column lists that alias snake_case DB columns to the camelCase interface fields.
+const SESSION_COLUMNS =
+  'id, user_id AS userId, category_id AS categoryId, trials_count AS trialsCount, ' +
+  'started_at AS startedAt, completed_at AS completedAt, synced, remote_id AS remoteId';
+
+const TRIAL_COLUMNS =
+  'id, session_id AS sessionId, trial_number AS trialNumber, surah_id AS surahId, ' +
+  'surah_name AS surahName, surah_english_name AS surahEnglishName, start_ayah AS startAyah, ' +
+  'start_global_ayah_number AS startGlobalAyahNumber, end_surah_id AS endSurahId, ' +
+  'end_surah_name AS endSurahName, end_surah_english_name AS endSurahEnglishName, ' +
+  'end_ayah AS endAyah, arabic_snippet AS arabicSnippet, arabic_end_snippet AS arabicEndSnippet, ' +
+  'score, notes, synced';
+
 class DatabaseService {
   private db: SQLite.SQLiteDatabase | null = null;
   private initialized: boolean = false;
@@ -190,7 +203,7 @@ class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const result = await this.db.getFirstAsync<LocalSession>(
-      'SELECT * FROM sessions WHERE id = ?',
+      `SELECT ${SESSION_COLUMNS} FROM sessions WHERE id = ?`,
       [id]
     );
 
@@ -201,7 +214,7 @@ class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const results = await this.db.getAllAsync<LocalSession>(
-      'SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?',
+      `SELECT ${SESSION_COLUMNS} FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
 
@@ -212,7 +225,7 @@ class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const results = await this.db.getAllAsync<LocalSession>(
-      'SELECT * FROM sessions WHERE synced = 0'
+      `SELECT ${SESSION_COLUMNS} FROM sessions WHERE synced = 0`
     );
 
     return results;
@@ -250,7 +263,7 @@ class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const results = await this.db.getAllAsync<LocalTrialResult>(
-      'SELECT * FROM trial_results WHERE session_id = ? ORDER BY trial_number ASC',
+      `SELECT ${TRIAL_COLUMNS} FROM trial_results WHERE session_id = ? ORDER BY trial_number ASC`,
       [sessionId]
     );
 
@@ -260,7 +273,7 @@ class DatabaseService {
   async getUnsyncedTrials(sessionId?: string): Promise<LocalTrialResult[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM trial_results WHERE synced = 0';
+    let query = `SELECT ${TRIAL_COLUMNS} FROM trial_results WHERE synced = 0`;
     const params: any[] = [];
 
     if (sessionId) {

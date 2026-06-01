@@ -10,6 +10,9 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAuthStore } from '../stores/useAuthStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
+import { RECITERS } from '../constants';
 
 type SettingItem = {
     icon: string;
@@ -21,6 +24,17 @@ type SettingItem = {
 export default function SettingsScreen() {
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
+    const { user, profile, signOut } = useAuthStore();
+    const { theme, setTheme, preferredReciter, audioQuality } = useSettingsStore();
+
+    const displayName = profile?.displayName || user?.email?.split('@')[0] || 'Guest';
+    const reciterName = RECITERS.find(r => r.id === preferredReciter)?.name ?? 'Mishary Rashid';
+    const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto';
+
+    const handleSignOut = async () => {
+        await signOut();
+        router.replace('/(auth)/login');
+    };
 
     const accountSettings: SettingItem[] = [
         { icon: 'person-outline', label: 'Edit Profile' },
@@ -28,14 +42,19 @@ export default function SettingsScreen() {
     ];
 
     const appPreferences: SettingItem[] = [
-        { icon: 'palette', label: 'Theme Selection', value: 'Dark Mode' },
+        {
+            icon: 'palette',
+            label: 'Theme',
+            value: themeLabel,
+            onPress: () => setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'auto' : 'dark'),
+        },
         { icon: 'notifications-active', label: 'Notification Settings', onPress: () => router.push('/(app)/notifications') },
         { icon: 'language', label: 'Language', value: 'English' },
     ];
 
     const audioSettings: SettingItem[] = [
-        { icon: 'record-voice-over', label: 'Default Reciter', value: 'Mishary Rashid' },
-        { icon: 'high-quality', label: 'Audio Quality', value: 'Standard' },
+        { icon: 'record-voice-over', label: 'Default Reciter', value: reciterName },
+        { icon: 'high-quality', label: 'Audio Quality', value: audioQuality ?? 'Standard' },
     ];
 
     const supportSettings: SettingItem[] = [
@@ -100,8 +119,8 @@ export default function SettingsScreen() {
                             </TouchableOpacity>
                         </View>
                         <View style={styles.profileInfo}>
-                            <Text style={styles.profileName}>Ahmed Abdullah</Text>
-                            <Text style={styles.profileLevel}>Hafidh Level • 12 Juz Memorized</Text>
+                            <Text style={styles.profileName}>{displayName}</Text>
+                            <Text style={styles.profileLevel}>{user?.email ?? 'Guest'}</Text>
                         </View>
                     </View>
 
@@ -142,12 +161,13 @@ export default function SettingsScreen() {
                         <TouchableOpacity
                             style={[styles.signOutButton, isDark ? styles.signOutButtonDark : styles.signOutButtonLight]}
                             activeOpacity={0.8}
+                            onPress={handleSignOut}
                         >
                             <MaterialIcons name="logout" size={24} color="#ef4444" />
                             <Text style={styles.signOutText}>Sign Out</Text>
                         </TouchableOpacity>
                         <Text style={[styles.versionText, isDark && styles.versionTextDark]}>
-                            VERSION 2.4.0 (2024)
+                            HIFDH PRACTICE APP
                         </Text>
                     </View>
 

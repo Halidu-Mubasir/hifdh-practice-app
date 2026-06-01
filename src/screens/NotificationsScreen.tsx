@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -11,8 +11,11 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Storage } from '../utils/storage';
 
 type PrayerTime = 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
+
+const NOTIF_KEY = 'notification_prefs';
 
 export default function NotificationsScreen() {
     const colorScheme = useColorScheme();
@@ -23,6 +26,35 @@ export default function NotificationsScreen() {
     const [weeklyProgress, setWeeklyProgress] = useState(false);
     const [prayerTimesSync, setPrayerTimesSync] = useState(true);
     const [selectedPrayers, setSelectedPrayers] = useState<PrayerTime[]>(['Fajr', 'Maghrib']);
+
+    useEffect(() => {
+        Storage.get<{
+            dailyRevision: boolean;
+            newTestAvailability: boolean;
+            weeklyProgress: boolean;
+            prayerTimesSync: boolean;
+            selectedPrayers: PrayerTime[];
+        }>(NOTIF_KEY).then((saved) => {
+            if (saved) {
+                setDailyRevision(saved.dailyRevision);
+                setNewTestAvailability(saved.newTestAvailability);
+                setWeeklyProgress(saved.weeklyProgress);
+                setPrayerTimesSync(saved.prayerTimesSync);
+                setSelectedPrayers(saved.selectedPrayers);
+            }
+        }).catch(() => {});
+    }, []);
+
+    const handleSave = async () => {
+        await Storage.set(NOTIF_KEY, {
+            dailyRevision,
+            newTestAvailability,
+            weeklyProgress,
+            prayerTimesSync,
+            selectedPrayers,
+        });
+        router.back();
+    };
 
     const togglePrayer = (prayer: PrayerTime) => {
         if (selectedPrayers.includes(prayer)) {
@@ -228,7 +260,7 @@ export default function NotificationsScreen() {
                     <View style={styles.actionSection}>
                         <TouchableOpacity
                             style={styles.saveButton}
-                            onPress={() => router.back()}
+                            onPress={handleSave}
                         >
                             <Text style={styles.saveButtonText}>Save Preferences</Text>
                         </TouchableOpacity>

@@ -35,7 +35,7 @@ export default function SummaryScreen() {
   } = useSessionStore();
 
   // Calculate average score
-  const totalScore = sessionRecords.reduce((sum, record) => sum + (record.score || 0), 0);
+  const totalScore = sessionRecords.reduce((sum, record) => sum + ((record?.score) || 0), 0);
   const averageScore = sessionRecords.length > 0 ? totalScore / sessionRecords.length : 0;
 
   const handleExportCSV = async () => {
@@ -104,7 +104,7 @@ export default function SummaryScreen() {
                   marginTop: 4,
                 }}
               >
-                {selectedCategory.englishName}
+                {selectedCategory.title}
               </Text>
             )}
           </View>
@@ -171,7 +171,7 @@ export default function SummaryScreen() {
           Trial Results
         </Text>
 
-        {sessionRecords.map((record, index) => (
+        {sessionRecords.map((record, index) => record && (
           <Card key={index} style={{ marginBottom: 16 }}>
             {/* Trial Number */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -182,7 +182,7 @@ export default function SummaryScreen() {
                   color: isDark ? '#f3f4f6' : '#1f2937',
                 }}
               >
-                Trial {record.trialNumber}
+                Trial {index + 1}
               </Text>
               <StarRating value={record.score || 0} max={5} size={20} onChange={() => {}} />
             </View>
@@ -205,17 +205,18 @@ export default function SummaryScreen() {
                   color: isDark ? '#f3f4f6' : '#1f2937',
                 }}
               >
-                {record.surahEnglishName} ({record.surahName}) - Verse {record.startAyah}
+                {record.trial.surahEnglishName} ({record.trial.surahName}) - Verse {record.trial.startAyah}
               </Text>
-              {record.arabicSnippet && (
+              {record.trial.arabicSnippet && (
                 <ArabicText
-                  text={record.arabicSnippet}
                   style={{
                     fontSize: 16,
                     marginTop: 8,
                     color: isDark ? '#d1d5db' : '#4b5563',
                   }}
-                />
+                >
+                  {record.trial.arabicSnippet}
+                </ArabicText>
               )}
             </View>
 
@@ -237,17 +238,18 @@ export default function SummaryScreen() {
                   color: isDark ? '#f3f4f6' : '#1f2937',
                 }}
               >
-                {record.endSurahEnglishName} ({record.endSurahName}) - Verse {record.endAyah}
+                {record.trial.endSurahEnglishName} ({record.trial.endSurahName}) - Verse {record.trial.endAyah}
               </Text>
-              {record.arabicEndSnippet && (
+              {record.trial.arabicEndSnippet && (
                 <ArabicText
-                  text={record.arabicEndSnippet}
                   style={{
                     fontSize: 16,
                     marginTop: 8,
                     color: isDark ? '#d1d5db' : '#4b5563',
                   }}
-                />
+                >
+                  {record.trial.arabicEndSnippet}
+                </ArabicText>
               )}
             </View>
 
@@ -305,7 +307,7 @@ export default function SummaryScreen() {
             fullWidth
             icon={<RefreshIcon size={20} color={isDark ? '#3b82f6' : '#2563eb'} />}
           >
-            Practice Again ({selectedCategory?.englishName})
+            Practice Again ({selectedCategory?.title})
           </Button>
 
           {/* Back to Categories */}

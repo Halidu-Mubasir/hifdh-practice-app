@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -12,40 +12,63 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
+import { db } from '../services/database';
 
 const { width } = Dimensions.get('window');
 
 type Timeframe = 'Day' | 'Week' | 'Month' | 'Year';
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function StatisticsScreen() {
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
 
     const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('Week');
+    const [sessionCount, setSessionCount] = useState(0);
+    const [averageScore, setAverageScore] = useState<number | null>(null);
+    const [activityData, setActivityData] = useState(
+        DAY_LABELS.map(day => ({ day, height: 10, opacity: 0.1 }))
+    );
 
     const timeframes: Timeframe[] = ['Day', 'Week', 'Month', 'Year'];
+
+    useEffect(() => {
+        db.getSessionCount().then(setSessionCount).catch(() => {});
+        db.getAverageScore().then(setAverageScore).catch(() => {});
+        db.getSessionHistory(50).then((sessions) => {
+            // Build a 7-day activity map
+            const now = Date.now();
+            const dayCounts = new Array(7).fill(0);
+            sessions.forEach((s) => {
+                const daysAgo = Math.floor((now - s.startedAt) / (1000 * 60 * 60 * 24));
+                if (daysAgo >= 0 && daysAgo < 7) {
+                    // Map to Mon=0…Sun=6 relative to today
+                    const todayDow = (new Date().getDay() + 6) % 7; // 0=Mon
+                    const targetDow = (todayDow - daysAgo + 7) % 7;
+                    dayCounts[targetDow]++;
+                }
+            });
+            const maxCount = Math.max(...dayCounts, 1);
+            setActivityData(DAY_LABELS.map((day, i) => ({
+                day,
+                height: Math.max(10, Math.round((dayCounts[i] / maxCount) * 90)),
+                opacity: Math.max(0.1, dayCounts[i] / maxCount),
+            })));
+        }).catch(() => {});
+    }, []);
 
     // Calculate circle progress
     const radius = 88;
     const circumference = 2 * Math.PI * radius;
-    const progress = 0.94; // 94%
+    const accuracyPct = sessionCount > 0 && averageScore !== null ? (averageScore / 5) : 0;
+    const progress = accuracyPct;
     const strokeDashoffset = circumference * (1 - progress);
+    const accuracyDisplay = sessionCount > 0 && averageScore !== null
+        ? `${Math.round(accuracyPct * 100)}%`
+        : '—';
 
-    const activityData = [
-        { day: 'Mon', height: 40, opacity: 0.2 },
-        { day: 'Tue', height: 60, opacity: 0.4 },
-        { day: 'Wed', height: 50, opacity: 0.3 },
-        { day: 'Thu', height: 90, opacity: 1 },
-        { day: 'Fri', height: 75, opacity: 0.6 },
-        { day: 'Sat', height: 20, opacity: 0.1 },
-        { day: 'Sun', height: 45, opacity: 0.5 },
-    ];
-
-    const weakAreas = [
-        { name: 'Surah Al-Baqarah', accuracy: 72, badge: 'Weak', badgeColor: '#ef4444', progress: 0.72, lastTested: '2 days ago' },
-        { name: 'Surah Yusuf', accuracy: 81, badge: 'Improving', badgeColor: '#f97316', progress: 0.81, lastTested: '4 days ago' },
-        { name: 'Surah An-Nisa', accuracy: 85, badge: 'Needs Rev', badgeColor: '#eab308', progress: 0.85, lastTested: '1 week ago' },
-    ];
+    const weakAreas: { name: string; accuracy: number; badge: string; badgeColor: string; progress: number; lastTested: string }[] = [];
 
     return (
         <View style={[styles.container, isDark ? styles.containerDark : styles.containerLight]}>
@@ -122,7 +145,7 @@ export default function StatisticsScreen() {
                                     />
                                 </Svg>
                                 <View style={styles.circularProgressText}>
-                                    <Text style={styles.accuracyPercentage}>94%</Text>
+                                    <Text style={styles.accuracyPercentage}>{accuracyDisplay}</Text>
                                     <Text style={styles.accuracyLabel}>ACCURACY</Text>
                                 </View>
                             </View>
@@ -130,13 +153,15 @@ export default function StatisticsScreen() {
                             {/* Stats Grid */}
                             <View style={styles.statsGrid}>
                                 <View style={styles.statItem}>
-                                    <Text style={styles.statValue}>1,248</Text>
-                                    <Text style={styles.statLabel}>Verses Correct</Text>
+                                    <Text style={styles.statValue}>{sessionCount}</Text>
+                                    <Text style={styles.statLabel}>Sessions</Text>
                                 </View>
                                 <View style={styles.statDivider} />
                                 <View style={styles.statItem}>
-                                    <Text style={[styles.statValue, styles.statValueSecondary]}>72</Text>
-                                    <Text style={styles.statLabel}>Review Flags</Text>
+                                    <Text style={[styles.statValue, styles.statValueSecondary]}>
+                                        {sessionCount > 0 && averageScore !== null ? averageScore.toFixed(1) : '—'}
+                                    </Text>
+                                    <Text style={styles.statLabel}>Avg Score /5</Text>
                                 </View>
                             </View>
                         </View>
@@ -150,19 +175,21 @@ export default function StatisticsScreen() {
                                 <Text style={styles.quickStatTitle}>STREAK</Text>
                             </View>
                             <View style={styles.quickStatValueContainer}>
-                                <Text style={styles.quickStatValue}>12</Text>
-                                <Text style={styles.quickStatUnit}>Days</Text>
+                                <Text style={styles.quickStatValue}>{sessionCount}</Text>
+                                <Text style={styles.quickStatUnit}>Sessions</Text>
                             </View>
                         </View>
 
                         <View style={styles.quickStatCard}>
                             <View style={styles.quickStatHeader}>
                                 <MaterialIcons name="emoji-events" size={14} color="#d4af37" />
-                                <Text style={[styles.quickStatTitle, styles.quickStatTitleGold]}>MASTERY</Text>
+                                <Text style={[styles.quickStatTitle, styles.quickStatTitleGold]}>AVG SCORE</Text>
                             </View>
                             <View style={styles.quickStatValueContainer}>
-                                <Text style={styles.quickStatValue}>8</Text>
-                                <Text style={styles.quickStatUnit}>Surahs</Text>
+                                <Text style={styles.quickStatValue}>
+                                    {sessionCount > 0 && averageScore !== null ? averageScore.toFixed(1) : '—'}
+                                </Text>
+                                <Text style={styles.quickStatUnit}>of 5</Text>
                             </View>
                         </View>
                     </View>

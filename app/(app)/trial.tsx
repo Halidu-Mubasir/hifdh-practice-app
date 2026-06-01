@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   useColorScheme,
@@ -29,10 +30,16 @@ export default function ActiveVerseTestScreen() {
     nextTrial,
     resetSession,
     isSessionComplete,
+    setScore,
+    setNotes,
+    currentScore,
+    currentNotes,
   } = useSessionStore();
 
   const { loadAndPlay, isPlaying, status: audioStatus } = useAudioStore();
   const { showEndVerseSnippet } = useSettingsStore();
+
+  const [showRating, setShowRating] = useState(false);
 
   // Generate trial on mount if needed
   useEffect(() => {
@@ -44,7 +51,7 @@ export default function ActiveVerseTestScreen() {
   // Navigate to summary when session is complete
   useEffect(() => {
     if (isSessionComplete) {
-      router.replace('/(app)/test-summary');
+      router.replace('/(app)/summary');
     }
   }, [isSessionComplete]);
 
@@ -54,7 +61,7 @@ export default function ActiveVerseTestScreen() {
   };
 
   const handleFinish = () => {
-    router.replace('/(app)/test-summary');
+    router.replace('/(app)/summary');
   };
 
   const handlePlayAudio = async () => {
@@ -64,15 +71,21 @@ export default function ActiveVerseTestScreen() {
   };
 
   const handleRegenerate = async () => {
+    setShowRating(false);
     await regenerateTrial();
   };
 
-  const handleNextVerse = async () => {
+  const handleNextVerse = () => {
+    setShowRating(true);
+  };
+
+  const handleConfirmRating = async () => {
+    setShowRating(false);
     await nextTrial();
   };
 
   const handleEndSessionEarly = () => {
-    router.replace('/(app)/test-summary');
+    router.replace('/(app)/summary');
   };
 
   const progress = numberOfTrials > 0 ? (currentAttempt / numberOfTrials) * 100 : 0;
@@ -197,6 +210,33 @@ export default function ActiveVerseTestScreen() {
               {audioStatus === 'loading' ? 'Loading...' : isPlaying ? 'Pause Audio' : 'Play Audio'}
             </Text>
           </TouchableOpacity>
+
+          {/* Rating Panel — shown after tapping "Next Verse" */}
+          {showRating && (
+            <View style={[styles.ratingPanel, isDark ? styles.ratingPanelDark : styles.ratingPanelLight]}>
+              <Text style={[styles.ratingTitle, isDark ? styles.textSlate400 : styles.textSlate500]}>
+                Rate Your Recitation
+              </Text>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity key={star} onPress={() => setScore(star)} style={styles.starButton}>
+                    <Text style={[styles.starChar, { opacity: (currentScore ?? 0) >= star ? 1 : 0.3 }]}>
+                      ★
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[styles.notesInput, isDark ? styles.notesInputDark : styles.notesInputLight]}
+                placeholder="Notes (optional)"
+                placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
+                value={currentNotes}
+                onChangeText={setNotes}
+                multiline
+                maxLength={200}
+              />
+            </View>
+          )}
         </View>
       </View>
 
@@ -205,28 +245,36 @@ export default function ActiveVerseTestScreen() {
         <View style={styles.footer}>
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            {/* Regenerate Button */}
-            <TouchableOpacity
-              style={[styles.actionButton, isDark ? styles.actionButtonDark : styles.actionButtonLight]}
-              onPress={handleRegenerate}
-            >
-              <View style={[styles.actionIconContainer, isDark ? styles.actionIconContainerDark : styles.actionIconContainerLight]}>
-                <MaterialIcons name="refresh" size={24} color={isDark ? '#cbd5e1' : '#475569'} />
-              </View>
-              <Text style={[styles.actionButtonText, isDark ? styles.textSlate400 : styles.textSlate600]}>
-                Regenerate
-              </Text>
-            </TouchableOpacity>
+            {/* Regenerate Button — hidden during rating */}
+            {!showRating && (
+              <TouchableOpacity
+                style={[styles.actionButton, isDark ? styles.actionButtonDark : styles.actionButtonLight]}
+                onPress={handleRegenerate}
+              >
+                <View style={[styles.actionIconContainer, isDark ? styles.actionIconContainerDark : styles.actionIconContainerLight]}>
+                  <MaterialIcons name="refresh" size={24} color={isDark ? '#cbd5e1' : '#475569'} />
+                </View>
+                <Text style={[styles.actionButtonText, isDark ? styles.textSlate400 : styles.textSlate600]}>
+                  Regenerate
+                </Text>
+              </TouchableOpacity>
+            )}
 
-            {/* Next Verse Button */}
+            {/* Next Verse / Confirm Button */}
             <TouchableOpacity
-              style={[styles.actionButton, styles.nextButton]}
-              onPress={handleNextVerse}
+              style={[styles.actionButton, styles.nextButton, showRating && { flex: 1 }]}
+              onPress={showRating ? handleConfirmRating : handleNextVerse}
             >
               <View style={styles.nextIconContainer}>
-                <MaterialIcons name="arrow-forward-ios" size={24} color="#0a1a14" />
+                <MaterialIcons
+                  name={showRating ? 'check' : 'arrow-forward-ios'}
+                  size={24}
+                  color="#0a1a14"
+                />
               </View>
-              <Text style={styles.nextButtonText}>Next Verse</Text>
+              <Text style={styles.nextButtonText}>
+                {showRating ? 'Confirm & Next' : 'Next Verse'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -444,7 +492,7 @@ const styles = StyleSheet.create({
     left: -16,
   },
   arabicText: {
-    fontFamily: 'System',
+    fontFamily: 'NotoNaskhArabic',
     fontSize: 32,
     lineHeight: 56,
     textAlign: 'center',
@@ -592,6 +640,60 @@ const styles = StyleSheet.create({
   },
   homeIndicatorBarDark: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+
+  // Rating Panel
+  ratingPanel: {
+    width: '100%',
+    borderRadius: 20,
+    padding: 20,
+    gap: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  ratingPanelLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderColor: 'rgba(226, 232, 240, 0.8)',
+  },
+  ratingPanelDark: {
+    backgroundColor: 'rgba(18, 43, 33, 0.8)',
+    borderColor: 'rgba(19, 236, 146, 0.15)',
+  },
+  ratingTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  starButton: {
+    padding: 4,
+  },
+  starChar: {
+    fontSize: 36,
+    color: '#d4af37',
+  },
+  notesInput: {
+    width: '100%',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    borderWidth: 1,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  notesInputLight: {
+    backgroundColor: 'rgba(241, 245, 249, 0.8)',
+    borderColor: '#e2e8f0',
+    color: '#1e293b',
+  },
+  notesInputDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#f1f5f9',
   },
 
   // Text Colors

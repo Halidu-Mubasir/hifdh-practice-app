@@ -60,6 +60,7 @@ class SyncService {
       // Sync sessions
       const sessionsResult = await this.syncSessions();
       result.uploadedSessions = sessionsResult.count;
+      result.uploadedTrials = sessionsResult.trialCount;
       result.errors.push(...sessionsResult.errors);
 
       // Sync preferences
@@ -82,9 +83,10 @@ class SyncService {
   }
 
   // Sync sessions to Supabase
-  private async syncSessions(): Promise<{ count: number; errors: string[] }> {
+  private async syncSessions(): Promise<{ count: number; trialCount: number; errors: string[] }> {
     const errors: string[] = [];
     let count = 0;
+    let trialCount = 0;
 
     try {
       const userId = await this.getUserId();
@@ -121,7 +123,7 @@ class SyncService {
 
             // Sync trial results for this session
             const trialsResult = await this.syncTrialResults(session.id, uploadedSession.id);
-            result.uploadedTrials += trialsResult.count;
+            trialCount += trialsResult.count;
             errors.push(...trialsResult.errors);
 
             count++;
@@ -136,7 +138,7 @@ class SyncService {
       errors.push(error instanceof Error ? error.message : 'Unknown error');
     }
 
-    return { count, errors };
+    return { count, trialCount, errors };
   }
 
   // Sync trial results for a session
@@ -319,10 +321,10 @@ class SyncService {
   }
 
   // Subscribe to real-time changes (optional)
-  subscribeToSessions(
+  async subscribeToSessions(
     callback: (payload: any) => void
-  ): (() => void) | null {
-    const userId = this.getUserId();
+  ): Promise<(() => void) | null> {
+    const userId = await this.getUserId();
     if (!userId) return null;
 
     const channel = supabase

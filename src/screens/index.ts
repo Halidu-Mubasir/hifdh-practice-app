@@ -1,2 +1,9 @@
 export { default as DashboardScreen } from './DashboardScreen';
 export { default as TestConfigScreen } from './TestConfigScreen';
+export { default as TestSessionScreen } from './TestSessionScreen';
+export { default as TestSummaryScreen } from './TestSummaryScreen';
+export { default as SettingsScreen } from './SettingsScreen';
+export { default as StatisticsScreen } from './StatisticsScreen';
+export { default as RankScreen } from './RankScreen';
+export { default as NotificationsScreen } from './NotificationsScreen';
+export { default as RevisionMistakesScreen } from './RevisionMistakesScreen';
